@@ -19,7 +19,7 @@ if(b.action==='logout'){res.setHeader('Set-Cookie','gl_session=; Path=/api/admin
 const token=(req.headers.cookie||'').match(/(?:^|; )gl_session=([^;]+)/)?.[1]||'';
 const [t,h]=token.split('.');
 if(!t||!h||!/^\d+$/.test(t)||Number(t)<Date.now()||!equal(h,sign(t)))return res.status(401).json({ok:false,error:'Please sign in'});
-if(!['list','update','archive','restore','visits','addVisit','bulkAssign'].includes(b.action))return res.status(400).json({ok:false});
+if(!['list','update','archive','restore','visits','addVisit','bulkAssign','commGet','commSave','commTest'].includes(b.action))return res.status(400).json({ok:false});
 const upstream=await fetch(e,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({secret:s,action:'admin',payload:{action:b.action,id:b.id,updates:b.updates,ids:b.ids,assignedTo:b.assignedTo,date:b.date,service:b.service,notes:b.notes}}),signal:AbortSignal.timeout(25000)});
 const raw=await upstream.text();
 let data;try{data=JSON.parse(raw)}catch{console.error('Admin upstream non-JSON',b.action,upstream.status);return res.status(502).json({ok:false,error:'Apps Script returned an invalid response. Check deployment access and execution logs.'})}

@@ -1,24 +1,39 @@
-import crypto from 'node:crypto';
 export default async function handler(req,res){
 res.setHeader('Cache-Control','no-store');
 if(req.method!=='POST')return res.status(405).json({ok:false});
-const {ADMIN_PASSWORD:p,GAS_SHARED_SECRET:s,GAS_ENDPOINT:e}=process.env;
-if(!p||!s||!e)return res.status(503).json({ok:false,error:'Configuration missing'});
-const equal=(a,b)=>crypto.timingSafeEqual(crypto.createHash('sha256').update(String(a)).digest(),crypto.createHash('sha256').update(String(b)).digest());
-const sign=t=>crypto.createHmac('sha256',s).update('admin:'+p+':'+t).digest('hex');
+const {GAS_SHARED_SECRET:s,GAS_ENDPOINT:e}=process.env;
+const base='https://odbyijwovivsqdbsgyfd.supabase.co';
+const key='sb_publishable_MYuw17oSrSCJt5Sq3lYeOg_nP1LvDpb';
 try{
-if(req.headers.origin!== 'https://gloryland-connect.vercel.app')return res.status(403).json({ok:false});
+const allowed=new Set(['https://gloryland-connect.vercel.app',...([process.env.VERCEL_URL,process.env.VERCEL_BRANCH_URL].filter(Boolean).map(h=>'https://'+h))]);
+if(!allowed.has(req.headers.origin))return res.status(403).json({ok:false,error:'Untrusted origin'});
 const b=typeof req.body==='string'?JSON.parse(req.body):req.body||{};
-if(b.action==='login'){
-if(!equal(b.password,p))return res.status(401).json({ok:false,error:'Incorrect password'});
-const t=String(Date.now()+3600000);
-res.setHeader('Set-Cookie','gl_session='+t+'.'+sign(t)+'; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=3600');
+const authorization=req.headers.authorization||'';
+if(!/^Bearer [^\s]+$/.test(authorization))return res.status(401).json({ok:false,error:'Please sign in'});
+const headers={apikey:key,Authorization:authorization};
+const userRes=await fetch(base+'/auth/v1/user',{headers,signal:AbortSignal.timeout(10000)});
+if(!userRes.ok)return res.status(401).json({ok:false,error:'Session expired. Please sign in.'});
+const user=await userRes.json();
+if(!user.id||!user.email_confirmed_at)return res.status(403).json({ok:false,error:'Account not verified'});
+const roleRes=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active&user_id=eq.'+encodeURIComponent(user.id),{headers,signal:AbortSignal.timeout(10000)});
+if(!roleRes.ok)return res.status(502).json({ok:false,error:'Unable to verify permissions'});
+const roles=await roleRes.json();
+const member=roles[0];
+if(!member||!member.active)return res.status(403).json({ok:false,error:'Account is not authorised'});
+if(b.action==='identity')return res.json({ok:true,member});
+if(member.role!=='super_admin')return res.status(403).json({ok:false,error:'This workspace is currently restricted to Super Admins'});
+if(b.action==='teamList'){
+const response=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active,created_at&order=created_at.asc',{headers,signal:AbortSignal.timeout(10000)});
+if(!response.ok)return res.status(502).json({ok:false,error:'Unable to load team'});
+return res.json({ok:true,team:await response.json()});
+}
+if(b.action==='teamUpdate'){
+if(typeof b.user_id!=='string'||typeof b.display_name!=='string'||typeof b.active!=='boolean'||!['super_admin','admin','media','welfare','pastor','viewer'].includes(b.role))return res.status(400).json({ok:false,error:'Invalid team member'});
+const response=await fetch(base+'/rest/v1/rpc/gl_set_team_member',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({p_user:b.user_id,p_name:b.display_name,p_role:b.role,p_active:b.active}),signal:AbortSignal.timeout(10000)});
+if(!response.ok)return res.status(400).json({ok:false,error:'Unable to update member. Check account ID, name and the last active Super Admin rule.'});
 return res.json({ok:true});
 }
-if(b.action==='logout'){res.setHeader('Set-Cookie','gl_session=; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=0');return res.json({ok:true});}
-const token=(req.headers.cookie||'').match(/(?:^|; )gl_session=([^;]+)/)?.[1]||'';
-const [t,h]=token.split('.');
-if(!t||!h||!/^\d+$/.test(t)||Number(t)<Date.now()||!equal(h,sign(t)))return res.status(401).json({ok:false,error:'Please sign in'});
+if(!s||!e)return res.status(503).json({ok:false,error:'Registration backend configuration missing'});
 if(!['list','update','archive','restore','visits','addVisit','bulkAssign','commGet','commSave','commTest'].includes(b.action))return res.status(400).json({ok:false});
 const upstream=await fetch(e,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({secret:s,action:'admin',payload:{action:b.action,id:b.id,updates:b.updates,ids:b.ids,assignedTo:b.assignedTo,date:b.date,service:b.service,notes:b.notes}}),signal:AbortSignal.timeout(25000)});
 const raw=await upstream.text();

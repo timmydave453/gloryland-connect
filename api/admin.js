@@ -15,16 +15,16 @@ const userRes=await fetch(base+'/auth/v1/user',{headers,signal:AbortSignal.timeo
 if(!userRes.ok)return res.status(401).json({ok:false,error:'Session expired. Please sign in.'});
 const user=await userRes.json();
 if(!user.id||!user.email_confirmed_at)return res.status(403).json({ok:false,error:'Account not verified'});
-const roleRes=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active&user_id=eq.'+encodeURIComponent(user.id),{headers,signal:AbortSignal.timeout(10000)});
+const roleRes=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active,credential_ready&user_id=eq.'+encodeURIComponent(user.id),{headers,signal:AbortSignal.timeout(10000)});
 if(!roleRes.ok)return res.status(502).json({ok:false,error:'Unable to verify permissions'});
 const roles=await roleRes.json();
 const member=roles[0];
-if(!member||!member.active)return res.status(403).json({ok:false,error:'Account is not authorised'});
+if(!member||!member.active||!member.credential_ready)return res.status(403).json({ok:false,error:'Account is not authorised or activation is incomplete'});
 if(b.action==='identity')return res.json({ok:true,member});
 if(!['super_admin','admin'].includes(member.role))return res.status(403).json({ok:false,error:'This workspace is currently restricted to Super Admins and Admins'});
 if(member.role!=='super_admin'&&['teamList','teamUpdate','commGet','commSave','commTest'].includes(b.action))return res.status(403).json({ok:false,error:'This operation requires Super Admin access'});
 if(b.action==='teamList'){
-const response=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active,created_at&order=created_at.asc',{headers,signal:AbortSignal.timeout(10000)});
+const response=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active,credential_ready,created_at&order=created_at.asc',{headers,signal:AbortSignal.timeout(10000)});
 if(!response.ok)return res.status(502).json({ok:false,error:'Unable to load team'});
 return res.json({ok:true,team:await response.json()});
 }

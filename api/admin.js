@@ -34,6 +34,31 @@ const response=await fetch(base+'/rest/v1/rpc/gl_set_team_member',{method:'POST'
 if(!response.ok)return res.status(400).json({ok:false,error:'Unable to update member. Check account ID, name and the last active Super Admin rule.'});
 return res.json({ok:true});
 }
+
+if(['membershipList','membershipHistory','membershipSave'].includes(b.action)){
+ const allowedStages=['interested','contacted','orientation','confirmed','closed'];
+ const id=typeof b.id==='string'?b.id.trim():'';
+ if(b.action!=='membershipList'&&(!id||id.length>160))return res.status(400).json({ok:false,error:'Invalid guest reference'});
+ if(b.action==='membershipSave'){
+  if(member.role!=='super_admin')return res.status(403).json({ok:false,error:'Only Super Admins can change membership status'});
+  if(!allowedStages.includes(b.stage))return res.status(400).json({ok:false,error:'Invalid membership stage'});
+  const response=await fetch(base+'/rest/v1/gl_membership_events',{method:'POST',headers:{...headers,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({submission_id:id,stage:b.stage}),signal:AbortSignal.timeout(10000)});
+  if(!response.ok)return res.status(502).json({ok:false,error:'Membership status could not be saved'});
+  return res.json({ok:true});
+ }
+ if(b.action==='membershipHistory'){
+  const params=new URLSearchParams({submission_id:'eq.'+id,select:'stage,created_at,id',order:'id.desc',limit:'100'});
+  const response=await fetch(base+'/rest/v1/gl_membership_events?'+params,{headers,signal:AbortSignal.timeout(10000)});
+  if(!response.ok)return res.status(502).json({ok:false,error:'Membership history unavailable'});
+  return res.json({ok:true,history:await response.json()});
+ }
+ const offset=Number(b.offset||0);
+ if(!Number.isInteger(offset)||offset<0||offset>100000)return res.status(400).json({ok:false,error:'Invalid page'});
+ const params=new URLSearchParams({select:'submission_id,stage,created_at',order:'submission_id.asc',limit:'500',offset:String(offset)});
+ const response=await fetch(base+'/rest/v1/gl_membership_current?'+params,{headers,signal:AbortSignal.timeout(10000)});
+ if(!response.ok)return res.status(502).json({ok:false,error:'Membership records unavailable'});
+ const records=await response.json();return res.json({ok:true,records});
+}
 if(!s||!e)return res.status(503).json({ok:false,error:'Registration backend configuration missing'});
 if(!['list','update','archive','restore','visits','addVisit','bulkAssign','commGet','commSave','commTest'].includes(b.action))return res.status(400).json({ok:false});
 const upstream=await fetch(e,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({secret:s,action:'admin',payload:{action:b.action,id:b.id,updates:b.updates,ids:b.ids,assignedTo:b.assignedTo,date:b.date,service:b.service,notes:b.notes}}),signal:AbortSignal.timeout(25000)});

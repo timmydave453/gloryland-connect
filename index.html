@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script>(function(){const p=new URLSearchParams(location.hash.slice(1));if((p.has('access_token')&&['recovery','invite'].includes(p.get('type')))||p.has('error_code')||p.has('error_description'))location.replace('/reset-password.html'+location.hash);})();</script>
+  <script>(function(){const p=new URLSearchParams(location.hash.slice(1));if(p.has('access_token')&&p.get('type')==='magiclink'){location.replace("https://gloryland-connect-git-v35-acce-0a385e-yungdave01-8115s-projects.vercel.app/admin.html"+location.hash);return}if((p.has('access_token')&&['recovery','invite'].includes(p.get('type')))||p.has('error_code')||p.has('error_description'))location.replace('/reset-password.html'+location.hash);})();</script>
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport"

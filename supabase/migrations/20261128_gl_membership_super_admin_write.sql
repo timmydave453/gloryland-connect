@@ -1,0 +1,1 @@
+drop policy gl_membership_append on public.gl_membership_events; create policy gl_membership_append on public.gl_membership_events for insert to authenticated with check (actor=(select auth.uid()) and exists(select 1 from public.gl_team t where t.user_id=(select auth.uid()) and t.active and t.credential_ready and t.role='super_admin'));

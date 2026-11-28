@@ -21,7 +21,8 @@ const roles=await roleRes.json();
 const member=roles[0];
 if(!member||!member.active)return res.status(403).json({ok:false,error:'Account is not authorised'});
 if(b.action==='identity')return res.json({ok:true,member});
-if(member.role!=='super_admin')return res.status(403).json({ok:false,error:'This workspace is currently restricted to Super Admins'});
+if(!['super_admin','admin'].includes(member.role))return res.status(403).json({ok:false,error:'This workspace is currently restricted to Super Admins and Admins'});
+if(member.role!=='super_admin'&&['teamList','teamUpdate','commGet','commSave','commTest'].includes(b.action))return res.status(403).json({ok:false,error:'This operation requires Super Admin access'});
 if(b.action==='teamList'){
 const response=await fetch(base+'/rest/v1/gl_team?select=user_id,display_name,role,active,created_at&order=created_at.asc',{headers,signal:AbortSignal.timeout(10000)});
 if(!response.ok)return res.status(502).json({ok:false,error:'Unable to load team'});
